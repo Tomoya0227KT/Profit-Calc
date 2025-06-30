@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eureka Popcorn 利益シミュレーター v3</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            max-width: 1200px;
+            margin: auto;
+        }
+        .panel {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .controls {
+            flex: 1;
+            min-width: 320px;
+        }
+        .dashboard {
+            flex: 2;
+            min-width: 500px;
+        }
+        h2 {
+            margin-top: 0;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 10px;
+            color: #1a73e8;
+            font-size: 1.5em;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .input-group input[type="number"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+        }
+        .input-group input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+        .slider-value {
+            font-weight: bold;
+            font-size: 18px;
+            color: #1a73e8;
+        }
+        .order-price {
+            background-color: #e8f0fe;
+            border-left: 5px solid #1a73e8;
+            padding: 15px;
+            margin-top: 10px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px 15px;
+            text-align: right;
+        }
+        th {
+            background-color: #f7f7f7;
+            font-weight: 600;
+            text-align: left;
+            width: 40%;
+        }
+        td.value {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .final-profit {
+            font-size: 1.3em !important;
+            background-color: #e8f0fe;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="panel controls">
+            <h2>コントロールパネル</h2>
+            
+            <div class="input-group">
+                <label for="quantitySlider">1. 購入個数を選択</label>
+                <input type="range" id="quantitySlider" min="1" max="20" value="4">
+                <p>選択中の個数: <span id="quantityValue" class="slider-value">4</span>個</p>
+                <div id="orderPrice" class="order-price">ご注文金額: 2,600円</div>
+            </div>
+
+            <div class="input-group">
+                <label for="sellingPrice">販売価格（税込）</label>
+                <input type="number" id="sellingPrice" value="650">
+            </div>
+
+            <div class="input-group">
+                <label for="productCost">製品原価</label>
+                <input type="number" id="productCost" value="250.7">
+            </div>
+
+            <div class="input-group">
+                <label for="freeShippingThreshold">送料無料になる注文金額</label>
+                <input type="number" id="freeShippingThreshold" value="3000">
+            </div>
+            
+            <div class="input-group">
+                <label for="bogoThreshold">YY個以上で1個無料 (0でOFF)</label>
+                <input type="number" id="bogoThreshold" value="5">
+            </div>
+
+            <h2>▼ 送料設定</h2>
+            <div class="input-group">
+                <label for="shipping60">60サイズ送料</label>
+                <input type="number" id="shipping60" value="730">
+            </div>
+            <div class="input-group">
+                <label for="shipping80">80サイズ送料</label>
+                <input type="number" id="shipping80" value="835">
+            </div>
+            <div class="input-group">
+                <label for="shipping100">100サイズ送料</label>
+                <input type="number" id="shipping100" value="935">
+            </div>
+        </div>
+
+        <div class="panel dashboard">
+            <h2>シミュレーション結果</h2>
+            <table>
+                <tbody id="resultsTableBody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+<script>
+    // --- 要素の取得 ---
+    const allInputs = document.querySelectorAll('input');
+    const quantitySlider = document.getElementById('quantitySlider');
+    const quantityValueSpan = document.getElementById('quantityValue');
+    const orderPriceDiv = document.getElementById('orderPrice');
+    const resultsTableBody = document.getElementById('resultsTableBody');
+
+    // --- メインの計算とUI更新を行う関数 ---
+    function calculateAndDisplay() {
+        // 1. 入力値を取得する
+        const inputs = {
+            quantity: parseInt(quantitySlider.value),
+            sellingPrice: parseFloat(document.getElementById('sellingPrice').value) || 0,
+            productCost: parseFloat(document.getElementById('productCost').value) || 0,
+            freeShippingThreshold: parseFloat(document.getElementById('freeShippingThreshold').value) || 0,
+            bogoThreshold: parseInt(document.getElementById('bogoThreshold').value) || 0,
+            shippingRates: {
+                60: parseFloat(document.getElementById('shipping60').value) || 0,
+                80: parseFloat(document.getElementById('shipping80').value) || 0,
+                100: parseFloat(document.getElementById('shipping100').value) || 0,
+            }
+        };
+
+        // 2. 取得した値から結果を計算する
+        const results = performCalculations(inputs);
+
+        // 3. 計算結果を画面に表示する
+        updateUI(results);
+    }
+    
+    // --- 計算専門の関数 ---
+    function performCalculations(inputs) {
+        const { quantity, sellingPrice, productCost, freeShippingThreshold, bogoThreshold, shippingRates } = inputs;
+
+        const revenue = sellingPrice * quantity;
+
+        let numToCost = quantity;
+        let campaignNote = "";
+        if (bogoThreshold > 0 && quantity >= bogoThreshold) {
+            numToCost = quantity + 1;
+            campaignNote = `<i><small>(${quantity}個 + 無料1個)</small></i>`;
+        }
+        const totalProductCost = productCost * numToCost;
+
+        let boxSize, applicableShippingRate;
+        if (quantity >= 1 && quantity <= 4) {
+            boxSize = 60;
+            applicableShippingRate = shippingRates[60];
+        } else if (quantity >= 5 && quantity <= 9) {
+            boxSize = 80;
+            applicableShippingRate = shippingRates[80];
+        } else {
+            boxSize = 100;
+            applicableShippingRate = shippingRates[100];
+        }
+
+        let sellerShippingCost = 0;
+        let shippingNote = "<i><small>購入者負担</small></i>";
+        if (freeShippingThreshold > 0 && revenue >= freeShippingThreshold) {
+            sellerShippingCost = applicableShippingRate;
+            shippingNote = `<i><small>販売者負担 (${boxSize}サイズ)</small></i>`;
+        }
+
+        const totalVariableCost = totalProductCost + sellerShippingCost;
+        const grossProfit = revenue - totalVariableCost;
+        const grossMargin = (revenue > 0) ? (grossProfit / revenue) : 0;
+
+        return {
+            quantity, revenue, totalProductCost, campaignNote, shippingNote,
+            sellerShippingCost, totalVariableCost, grossProfit, grossMargin
+        };
+    }
+
+    // --- 画面表示専門の関数 ---
+    function updateUI(res) {
+        quantityValueSpan.textContent = res.quantity;
+        orderPriceDiv.textContent = `ご注文金額: ${res.revenue.toLocaleString()}円`;
+        
+        resultsTableBody.innerHTML = `
+            <tr><th>売上</th><td class="value">${res.revenue.toLocaleString()}円</td></tr>
+            <tr><th>製品原価 ${res.campaignNote}</th><td class="value">${res.totalProductCost.toLocaleString()}円</td></tr>
+            <tr><th>送料 ${res.shippingNote}</th><td class="value">${res.sellerShippingCost.toLocaleString()}円</td></tr>
+            <tr><th>変動費 合計</th><td class="value">${res.totalVariableCost.toLocaleString()}円</td></tr>
+            <tr><th class="final-profit">粗利</th><td class="value final-profit">${res.grossProfit.toLocaleString()}円</td></tr>
+            <tr><th class="final-profit">粗利率</th><td class="value final-profit">${(res.grossMargin * 100).toFixed(1)}%</td></tr>
+        `;
+    }
+
+    // --- イベントリスナーの設定 ---
+    // 全てのinput要素に変更があったら、再計算と再表示を行う
+    allInputs.forEach(input => {
+        input.addEventListener('input', calculateAndDisplay);
+    });
+
+    // --- 初期表示 ---
+    // ページが読み込まれた時に、最初の計算と表示を行う
+    document.addEventListener('DOMContentLoaded', calculateAndDisplay);
+
+</script>
+</body>
+</html>
